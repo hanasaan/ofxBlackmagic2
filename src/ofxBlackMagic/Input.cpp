@@ -163,9 +163,9 @@ namespace ofxBlackmagic {
 
 		this->videoFrameInput.copyFromFrame(videoFrame);
 
-		this->videoFrame.lock.lock();
-		this->videoFrame.swapFrame(this->videoFrameInput);
-		this->videoFrame.lock.unlock();
+		this->videoFrameBack.lock.lock();
+		this->videoFrameBack.swapFrame(this->videoFrameInput);
+		this->videoFrameBack.lock.unlock();
 		this->newFrameReady = true;
 
 		return S_OK;
@@ -176,13 +176,16 @@ namespace ofxBlackmagic {
 		this->isFrameNewFlag = this->newFrameReady;
 		this->newFrameReady = false;
 		if (this->isFrameNewFlag) {
-			if (this->videoFrame.getWidth() != this->texture.getWidth() || this->videoFrame.getHeight() != this->texture.getHeight()) {
-				this->texture.allocate(this->videoFrame.getWidth(), this->videoFrame.getHeight(), GL_RGBA);
-			}
+			this->videoFrameBack.lock.lock();
+			this->videoFrameBack.swapFrame(this->videoFrame);
+			this->videoFrameBack.lock.unlock();
 
-			this->videoFrame.lock.lock();
-			this->texture.loadData(this->videoFrame.getPixels(), GL_RGBA);
-			this->videoFrame.lock.unlock();
+			if (this->isUsingTexture()) {
+				if (this->videoFrame.getWidth() != this->texture.getWidth() || this->videoFrame.getHeight() != this->texture.getHeight()) {
+					this->texture.allocate(this->videoFrame.getWidth(), this->videoFrame.getHeight(), GL_RGBA);
+				}
+				this->texture.loadData(this->videoFrame.getPixels(), GL_RGBA);
+			}
 		}
 	}
 

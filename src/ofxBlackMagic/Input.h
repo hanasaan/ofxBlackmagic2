@@ -85,6 +85,7 @@ namespace ofxBlackmagic {
 		DeviceDefinition device;
 		IDeckLinkInput* input;
 		Frame videoFrame;
+		Frame videoFrameBack;
 		Frame videoFrameInput;
 		ofTexture texture;
 		bool useTexture;
