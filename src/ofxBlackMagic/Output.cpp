@@ -2,7 +2,7 @@
 
 namespace ofxBlackmagic {
 
-	Output::Output() : pDLOutput(NULL), pDLVideoFrame(NULL), has_new_frame(false), mutex(NULL)
+	Output::Output() : pDLOutput(NULL), pDLVideoFrame(NULL), has_new_frame(false), mutex(NULL), b_queue_mode(false)
 	{
 	}
 
@@ -187,6 +187,31 @@ namespace ofxBlackmagic {
 			ofLogError("ofxDeckLinkAPI::Output") << "invalid pixel size";
 	}
 
+	void Output::setEnableQueueMode(bool enable, int numbuffer)
+	{
+		b_queue_mode = enable;
+		ofPixels pix;
+		pix.allocate(uiFrameWidth, uiFrameHeight, 4);
+		pix.set(255);
+		mutex->lock();
+		while (!queued_pixels.empty()) {
+			queued_pixels.pop();
+		}
+		for (int i = 0; i < numbuffer; ++i) {
+			queued_pixels.push(pix);
+		}
+		mutex->unlock();
+	}
+
+	void Output::publishQueuedPixels(ofPixels & pix)
+	{
+		mutex->lock();
+		queued_pixels.push(pix);
+		auto* back_buffer = &queued_pixels.back();
+		memcpy(&back_buffer->getData()[1], pix.getData(), pix.size() - 1);
+		mutex->unlock();
+	}
+
 	//
 
 	HRESULT Output::ScheduledFrameCompleted(IDeckLinkVideoFrame *completedFrame, BMDOutputFrameCompletionResult result)
@@ -203,10 +228,21 @@ namespace ofxBlackmagic {
 		}
 
 		mutex->lock();
-		if (has_new_frame)
-		{
-			has_new_frame = false;
-			std::swap(*front_buffer, *back_buffer);
+		if (b_queue_mode) {
+			if (!queued_pixels.empty()) {
+				*front_buffer = queued_pixels.front();
+				queued_pixels.pop();
+			}
+			else {
+				ofLogError() << "queued pixels is empty";
+			}
+		}
+		else {
+			if (has_new_frame)
+			{
+				has_new_frame = false;
+				std::swap(*front_buffer, *back_buffer);
+			}
 		}
 		mutex->unlock();
 
