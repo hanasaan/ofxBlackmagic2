@@ -42,7 +42,9 @@ namespace ofxBlackmagic {
 		queue<ofPixels> queued_pixels;
 		ofPixels pixels[2];
 		ofPixels *front_buffer, *back_buffer;
-		ofMutex *mutex;
+		ofMutex mutex;
+		std::mutex lock_close;
+		std::condition_variable cv;
 		bool has_new_frame;
 
 		bool initDeckLink(const DeviceDefinition&);

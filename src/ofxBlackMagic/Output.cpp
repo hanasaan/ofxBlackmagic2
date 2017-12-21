@@ -2,7 +2,7 @@
 
 namespace ofxBlackmagic {
 
-	Output::Output() : pDLOutput(NULL), pDLVideoFrame(NULL), has_new_frame(false), mutex(NULL), b_queue_mode(false)
+	Output::Output() : pDLOutput(NULL), pDLVideoFrame(NULL), has_new_frame(false), b_queue_mode(false)
 	{
 	}
 
@@ -15,8 +15,6 @@ namespace ofxBlackmagic {
 	{
 		stop();
 
-		mutex = new ofMutex;
-
 		return initDeckLink(device) && startDeckLink(mode);
 	}
 
@@ -24,14 +22,10 @@ namespace ofxBlackmagic {
 	{
 		if (pDLOutput != NULL)
 		{
+			unique_lock<std::mutex> lock(lock_close);
+			cv.wait(lock);
 			pDLOutput->Release();
 			pDLOutput = NULL;
-		}
-
-		if (mutex != NULL)
-		{
-			delete mutex;
-			mutex = NULL;
 		}
 	}
 
@@ -133,15 +127,13 @@ namespace ofxBlackmagic {
 
 	void Output::publishTexture(ofTexture &tex)
 	{
-		assert(mutex);
-
 		if (tex.getWidth() == uiFrameWidth
 			&& tex.getHeight() == uiFrameHeight)
 		{
 			ofPixels pix2;
 			tex.readToPixels(pix2);
 
-			mutex->lock();
+			mutex.lock();
 			if (!back_buffer->isAllocated() ||
 				back_buffer->getWidth() != tex.getWidth() ||
 				back_buffer->getHeight() != tex.getHeight()) {
@@ -154,7 +146,7 @@ namespace ofxBlackmagic {
 
 			has_new_frame = true;
 
-			mutex->unlock();
+			mutex.unlock();
 		}
 		else
 			ofLogError("ofxDeckLinkAPI::Output") << "invalid texture size";
@@ -162,12 +154,10 @@ namespace ofxBlackmagic {
 
 	void Output::publishPixels(ofPixels &pix)
 	{
-		assert(mutex);
-
 		if (pix.getWidth() == uiFrameWidth
 			&& pix.getHeight() == uiFrameHeight)
 		{
-			mutex->lock();
+			mutex.lock();
 			if (!back_buffer->isAllocated() ||
 				back_buffer->getWidth() != pix.getWidth() ||
 				back_buffer->getHeight() != pix.getHeight()) {
@@ -181,7 +171,7 @@ namespace ofxBlackmagic {
 
 			has_new_frame = true;
 
-			mutex->unlock();
+			mutex.unlock();
 		}
 		else
 			ofLogError("ofxDeckLinkAPI::Output") << "invalid pixel size";
@@ -193,29 +183,34 @@ namespace ofxBlackmagic {
 		ofPixels pix;
 		pix.allocate(uiFrameWidth, uiFrameHeight, 4);
 		pix.set(255);
-		mutex->lock();
+		mutex.lock();
 		while (!queued_pixels.empty()) {
 			queued_pixels.pop();
 		}
 		for (int i = 0; i < numbuffer; ++i) {
 			queued_pixels.push(pix);
 		}
-		mutex->unlock();
+		mutex.unlock();
 	}
 
 	void Output::publishQueuedPixels(ofPixels & pix)
 	{
-		mutex->lock();
+		mutex.lock();
 		queued_pixels.push(pix);
 		auto* back_buffer = &queued_pixels.back();
 		memcpy(&back_buffer->getData()[1], pix.getData(), pix.size() - 1);
-		mutex->unlock();
+		mutex.unlock();
 	}
 
 	//
 
 	HRESULT Output::ScheduledFrameCompleted(IDeckLinkVideoFrame *completedFrame, BMDOutputFrameCompletionResult result)
 	{
+		if (pDLOutput == NULL)
+		{
+			return S_OK;
+		}
+		unique_lock<std::mutex> lock(lock_close);
 		void* pFrame = NULL;
 		pDLVideoFrame->GetBytes((void**)&pFrame);
 		assert(pFrame != NULL);
@@ -227,7 +222,7 @@ namespace ofxBlackmagic {
 			num_schedule_frame = 2;
 		}
 
-		mutex->lock();
+		mutex.lock();
 		if (b_queue_mode) {
 			if (!queued_pixels.empty()) {
 				*front_buffer = queued_pixels.front();
@@ -244,7 +239,7 @@ namespace ofxBlackmagic {
 				std::swap(*front_buffer, *back_buffer);
 			}
 		}
-		mutex->unlock();
+		mutex.unlock();
 
 		memcpy(pFrame, front_buffer->getPixels(), uiFrameWidth * uiFrameHeight * front_buffer->getNumChannels());
 
@@ -253,6 +248,8 @@ namespace ofxBlackmagic {
 			if (pDLOutput->ScheduleVideoFrame(pDLVideoFrame, (uiTotalFrames * frameDuration), frameDuration, frameTimescale) == S_OK)
 				uiTotalFrames++;
 		}
+
+		cv.notify_all();
 
 		return S_OK;
 	}
