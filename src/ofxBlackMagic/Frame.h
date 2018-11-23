@@ -14,6 +14,13 @@ namespace ofxBlackmagic {
 			unsigned char minutes;
 			unsigned char seconds;
 			unsigned char frames;
+			bool b_drop_frame;
+
+			int toFrameNum(int timebase) const;
+			string toString() const;
+
+			bool operator==(const Timecode& vec) const;
+			bool operator!=(const Timecode& vec) const;
 		};
 
 		Frame();

@@ -80,10 +80,11 @@ namespace ofxBlackmagic {
 #endif
 		if (result != S_OK) {
 			this->timecode = {
-				0, 0, 0, 0
+				0, 0, 0, 0, false
 			};
 		} else {
 			timecode->GetComponents(&this->timecode.hours, &this->timecode.minutes, &this->timecode.seconds, &this->timecode.frames);
+			this->timecode.b_drop_frame = timecode->GetFlags() == bmdTimecodeIsDropFrame;
 		}
 
 		//inputFrame->GetAncillaryData(&this->ancillary);
@@ -183,6 +184,54 @@ namespace ofxBlackmagic {
 	//----------
 	ULONG STDMETHODCALLTYPE Frame::Release() {
 		return --this->references;
+	}
+
+	int Frame::Timecode::toFrameNum(int timebase) const
+	{
+		int num = frames + timebase * seconds + timebase * 60 * minutes + timebase * 3600 * hours;
+		if (b_drop_frame) {
+			num -= hours * 108;
+			for (int i = 0; i <= minutes; ++i) {
+				if (i % 10 != 0) {
+					num -= 2;
+				}
+			}
+		}
+		return num;
+	}
+
+	string Frame::Timecode::toString() const
+	{
+		if (b_drop_frame) {
+			return ofVAArgsToString("%02d:%02d:%02d;%02d",
+				hours,
+				minutes,
+				seconds,
+				frames);
+		}
+		else {
+			return ofVAArgsToString("%02d:%02d:%02d:%02d",
+				hours,
+				minutes,
+				seconds,
+				frames);
+		}
+	}
+
+	bool Frame::Timecode::operator==(const Timecode & vec) const
+	{
+		return (hours == vec.hours)
+			&& (minutes == vec.minutes)
+			&& (seconds == vec.seconds)
+			&& (frames == vec.frames);
+	}
+
+	bool Frame::Timecode::operator!=(const Timecode & vec) const
+	{
+		return (hours != vec.hours)
+			|| (minutes != vec.minutes)
+			|| (seconds != vec.seconds)
+			|| (frames != vec.frames);
 	}
 
 }
