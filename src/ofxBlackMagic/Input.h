@@ -19,6 +19,10 @@ namespace ofxBlackmagic {
 		bool isFrameNew() const;
 		DeviceDefinition& getDevice();
 		Frame & getFrame();
+		
+		void setUseDeckLinkColorConverter(bool);
+		bool isUseDeckLinkColorConverter() const;
+		float getCaptureFps() const;
 
 		//--
 		//IDeckLinkInputCallback
@@ -94,5 +98,9 @@ namespace ofxBlackmagic {
 		bool newFrameReady; // pre-update
 		bool isFrameNewFlag; // post-update
 		unsigned long referenceCount;
+
+		bool useDeckLinkColorConverter;
+
+		ofFpsCounter captureFps;
 	};
 }

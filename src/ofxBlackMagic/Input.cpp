@@ -8,6 +8,7 @@ namespace ofxBlackmagic {
 		this->isFrameNewFlag = false;
 		this->referenceCount = 1;
 		this->state = Waiting;
+		this->useDeckLinkColorConverter = true;
 	}
 
 	//---------
@@ -117,14 +118,31 @@ namespace ofxBlackmagic {
 	}
 
 	//---------
+	void Input::setUseDeckLinkColorConverter(bool b)
+	{
+		this->useDeckLinkColorConverter = b;
+	}
+
+	//---------
+	bool Input::isUseDeckLinkColorConverter() const
+	{
+		return useDeckLinkColorConverter;
+	}
+
+	float Input::getCaptureFps() const
+	{
+		return captureFps.getFps();
+	}
+
+	//---------
 #if defined(_WIN32)
 	HRESULT STDMETHODCALLTYPE Input::VideoInputFormatChanged(/* in */ BMDVideoInputFormatChangedEvents notificationEvents, /* in */ IDeckLinkDisplayMode *newMode, /* in */ BMDDetectedVideoInputFormatFlags detectedSignalFlags) {
 				bool shouldRestartCaptureWithNewVideoMode = true;
 
-				BMDPixelFormat	pixelFormat = bmdFormat10BitYUV;
+				BMDPixelFormat	pixelFormat = bmdFormat8BitYUV;
 
 				if (detectedSignalFlags & bmdDetectedVideoInputRGB444) {
-					pixelFormat = bmdFormat10BitRGB;
+					pixelFormat = bmdFormat8BitARGB;
 				}
 
 				// Restart capture with the new video mode if told to
@@ -161,13 +179,13 @@ namespace ofxBlackmagic {
 			return S_OK;
 		}
 
-		this->videoFrameInput.copyFromFrame(videoFrame);
+		this->videoFrameInput.copyFromFrame(videoFrame, useDeckLinkColorConverter);
 
 		this->videoFrameBack.lock.lock();
 		this->videoFrameBack.swapFrame(this->videoFrameInput);
 		this->videoFrameBack.lock.unlock();
 		this->newFrameReady = true;
-
+		this->captureFps.newFrame();
 		return S_OK;
 	}
 
@@ -181,10 +199,12 @@ namespace ofxBlackmagic {
 			this->videoFrameBack.lock.unlock();
 
 			if (this->isUsingTexture()) {
-				if (this->videoFrame.getWidth() != this->texture.getWidth() || this->videoFrame.getHeight() != this->texture.getHeight()) {
-					this->texture.allocate(this->videoFrame.getWidth(), this->videoFrame.getHeight(), GL_RGBA);
+				auto glInternalMode = (!this->useDeckLinkColorConverter && this->videoFrame.getNumChannels() == 2) ? GL_RG : GL_RGBA;
+				if (this->videoFrame.getWidth() != this->texture.getWidth() 
+					|| this->videoFrame.getHeight() != this->texture.getHeight()) {
+					this->texture.allocate(this->videoFrame.getWidth(), this->videoFrame.getHeight(), glInternalMode);
 				}
-				this->texture.loadData(this->videoFrame.getPixels(), GL_RGBA);
+				this->texture.loadData(this->videoFrame.getPixels(), glInternalMode);
 			}
 		}
 	}

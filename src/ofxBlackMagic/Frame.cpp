@@ -13,11 +13,11 @@ namespace ofxBlackmagic {
 	}
 
 	//----------
-	void Frame::allocate(int width, int height) {
+	void Frame::allocate(int width, int height, int channels) {
 		this->deallocate();
 		//we offset to store 1 byte either side of RGB so we can do ARGB and RGBA addressing
-		this->data = new unsigned char[width * height * 4 + 1];
-		this->pixels.setFromExternalPixels(this->data + 1, width, height, 4);
+		this->data = new unsigned char[width * height * channels + 1];
+		this->pixels.setFromExternalPixels(this->data + 1, width, height, channels);
 		*(data + this->pixels.size()) = 255; // set alpha channel of last byte
 	}
 
@@ -30,21 +30,22 @@ namespace ofxBlackmagic {
 	}
 
 	//----------
-	void Frame::copyFromFrame(IDeckLinkVideoFrame* inputFrame) {
+	void Frame::copyFromFrame(IDeckLinkVideoFrame* inputFrame, bool convertColor) {
 		auto inputFormat = inputFrame->GetPixelFormat();
 		
-		if (inputFrame->GetWidth() != this->GetWidth() || inputFrame->GetHeight() != this->GetHeight()) {
-			this->allocate(inputFrame->GetWidth(), inputFrame->GetHeight());
-		}
-		switch (inputFormat)
-		{
-		case bmdFormat8BitYUV:
+		if (convertColor) {
+			if (inputFrame->GetWidth() != this->GetWidth() || inputFrame->GetHeight() != this->GetHeight()) {
+				this->allocate(inputFrame->GetWidth(), inputFrame->GetHeight(), 4);
+			}
+			switch (inputFormat)
+			{
+			case bmdFormat8BitYUV:
 			{
 				auto & converter = Utils::CoManager::X().getVideoConverter();
 				converter.ConvertFrame(inputFrame, this);
 			}
 			break;
-		case bmdFormat8BitARGB:
+			case bmdFormat8BitARGB:
 			{
 				void* dataIn;
 				inputFrame->GetBytes(&dataIn);
@@ -52,23 +53,54 @@ namespace ofxBlackmagic {
 				memcpy(this->data, dataIn, size); //offset by 1 ARGB -> RGBA
 			}
 			break;
-		case bmdFormat8BitBGRA:
-		case bmdFormat10BitYUV:
-		{
-			auto & converter = Utils::CoManager::X().getVideoConverter();
-			converter.ConvertFrame(inputFrame, this);
+			case bmdFormat8BitBGRA:
+			case bmdFormat10BitYUV:
+			{
+				auto & converter = Utils::CoManager::X().getVideoConverter();
+				converter.ConvertFrame(inputFrame, this);
+			}
+			break;
+			case bmdFormat10BitRGB:
+			case bmdFormat10BitRGBXLE:
+			case bmdFormat10BitRGBX:
+			{
+				auto & converter = Utils::CoManager::X().getVideoConverter();
+				converter.ConvertFrame(inputFrame, this);
+			}
+			break;
+			default:
+				break;
+			}
 		}
+		else {
+			switch (inputFormat)
+			{
+			case bmdFormat8BitYUV:
+			{
+				if (inputFrame->GetWidth() != this->GetWidth() || inputFrame->GetHeight() != this->GetHeight()) {
+					this->allocate(inputFrame->GetWidth(), inputFrame->GetHeight(), 2);
+				}
+				void* dataIn;
+				inputFrame->GetBytes(&dataIn);
+				auto size = this->GetWidth() * this->GetHeight() * 2; // Todo
+				memcpy(this->data + 1, dataIn, size);
+			}
 			break;
-		case bmdFormat10BitRGB:
-		case bmdFormat10BitRGBXLE:
-		case bmdFormat10BitRGBX:
-		{
-			auto & converter = Utils::CoManager::X().getVideoConverter();
-			converter.ConvertFrame(inputFrame, this);
-		}
+			case bmdFormat8BitARGB:
+			{
+				if (inputFrame->GetWidth() != this->GetWidth() || inputFrame->GetHeight() != this->GetHeight()) {
+					this->allocate(inputFrame->GetWidth(), inputFrame->GetHeight(), 4);
+				}
+				void* dataIn;
+				inputFrame->GetBytes(&dataIn);
+				auto size = this->GetRowBytes() * this->GetHeight();
+				memcpy(this->data, dataIn, size); //offset by 1 ARGB -> RGBA
+			}
 			break;
-		default:
-			break;
+			default:
+				ofLogError() << "does not support 10bit color space without color conversion";
+				break;
+			}
 		}
 
 		//get timecode
@@ -105,6 +137,12 @@ namespace ofxBlackmagic {
 	//----------
 	int Frame::getHeight() const {
 		return this->pixels.getHeight();
+	}
+
+	//----------
+	int Frame::getNumChannels() const
+	{
+		return this->pixels.getNumChannels();
 	}
 
 	//----------

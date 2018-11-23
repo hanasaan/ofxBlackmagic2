@@ -26,13 +26,12 @@ namespace ofxBlackmagic {
 		Frame();
 		~Frame();
 
-		void allocate(int width, int height);
-		void deallocate();
-		void copyFromFrame(IDeckLinkVideoFrame*);
+		void copyFromFrame(IDeckLinkVideoFrame*, bool convertColor);
 		void swapFrame(Frame& fr);
 
 		int getWidth() const;
 		int getHeight() const;
+		int getNumChannels() const;
 		const Timecode & getTimecode() const;
 
 		ofMutex lock;
@@ -46,6 +45,9 @@ namespace ofxBlackmagic {
 		//--
 
 	protected:
+		void allocate(int width, int height, int channels);
+		void deallocate();
+
 		//--
 		//IDeckLinkVideoFrame
 		//
