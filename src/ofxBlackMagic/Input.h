@@ -9,6 +9,12 @@
 namespace ofxBlackmagic {
 	class Input : public IDeckLinkInputCallback, public ofBaseUpdates, public ofBaseDraws, public ofBaseHasPixels, public ofBaseHasTexture {
 	public:
+		enum DepthPrefer
+		{
+			DEPTH_8BIT,
+			DEPTH_10BIT
+		};
+
 		Input();
 		virtual ~Input();
 		
@@ -85,6 +91,8 @@ namespace ofxBlackmagic {
 		//
 		//--
 
+		DepthPrefer getDepthPrefer() const { return depthPrefer; }
+		void setDepthPrefer(DepthPrefer dp) { depthPrefer = dp; }
 	protected:
 		DeviceDefinition device;
 		IDeckLinkInput* input;
@@ -102,5 +110,7 @@ namespace ofxBlackmagic {
 		bool useDeckLinkColorConverter;
 
 		ofFpsCounter captureFps;
+
+		DepthPrefer depthPrefer;
 	};
 }

@@ -9,6 +9,7 @@ namespace ofxBlackmagic {
 		this->referenceCount = 1;
 		this->state = Waiting;
 		this->useDeckLinkColorConverter = true;
+		this->depthPrefer = DEPTH_8BIT;
 	}
 
 	//---------
@@ -71,7 +72,7 @@ namespace ofxBlackmagic {
 			this->device = device;
 			CHECK_ERRORS(device.device->QueryInterface(IID_IDeckLinkInput, (void**)&this->input), "Failed to query interface");
 			CHECK_ERRORS(this->input->SetCallback(this), "Failed to set input callback");
-			CHECK_ERRORS(this->input->EnableVideoInput(format, bmdFormat8BitYUV, videoInputFlags), "Failed to enable video input");
+			CHECK_ERRORS(this->input->EnableVideoInput(format, depthPrefer == DEPTH_8BIT ? bmdFormat8BitYUV : bmdFormat10BitYUV, videoInputFlags), "Failed to enable video input");
 			CHECK_ERRORS(this->input->StartStreams(), "Failed to start streams");
 			this->state = Running;
 		} catch(std::exception& e) {
@@ -139,10 +140,10 @@ namespace ofxBlackmagic {
 	HRESULT STDMETHODCALLTYPE Input::VideoInputFormatChanged(/* in */ BMDVideoInputFormatChangedEvents notificationEvents, /* in */ IDeckLinkDisplayMode *newMode, /* in */ BMDDetectedVideoInputFormatFlags detectedSignalFlags) {
 				bool shouldRestartCaptureWithNewVideoMode = true;
 
-				BMDPixelFormat	pixelFormat = bmdFormat8BitYUV;
+				BMDPixelFormat	pixelFormat = depthPrefer == DEPTH_8BIT ? bmdFormat8BitYUV : bmdFormat10BitYUV;
 
 				if (detectedSignalFlags & bmdDetectedVideoInputRGB444) {
-					pixelFormat = bmdFormat8BitARGB;
+					pixelFormat = depthPrefer == DEPTH_8BIT ? bmdFormat8BitARGB : bmdFormat10BitRGB;
 				}
 
 				// Restart capture with the new video mode if told to
