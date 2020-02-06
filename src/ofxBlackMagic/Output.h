@@ -14,7 +14,7 @@ namespace ofxBlackmagic {
 		Output();
 		~Output();
 
-		bool start(const DeviceDefinition&, const BMDDisplayMode&);
+		bool start(const DeviceDefinition&, const BMDDisplayMode&, uint32_t numChannels = 4);
 		void stop();
 
 		void publishTexture(ofTexture &tex);
@@ -25,6 +25,7 @@ namespace ofxBlackmagic {
 		void publishQueuedPixels(ofPixels &pix);
 		bool isQueueEmpty() const { return queued_pixels.empty(); }
 	protected:
+		uint32_t numChannels;
 
 		IDeckLinkOutput* pDLOutput;
 		IDeckLinkMutableVideoFrame*	pDLVideoFrame;

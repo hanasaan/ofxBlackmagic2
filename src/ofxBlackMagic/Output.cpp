@@ -2,7 +2,7 @@
 
 namespace ofxBlackmagic {
 
-	Output::Output() : pDLOutput(NULL), pDLVideoFrame(NULL), has_new_frame(false), b_queue_mode(false)
+	Output::Output() : pDLOutput(NULL), pDLVideoFrame(NULL), has_new_frame(false), b_queue_mode(false), numChannels(4)
 	{
 	}
 
@@ -11,9 +11,11 @@ namespace ofxBlackmagic {
 		stop();
 	}
 
-	bool Output::start(const DeviceDefinition & device, const BMDDisplayMode & mode)
+	bool Output::start(const DeviceDefinition & device, const BMDDisplayMode & mode, uint32_t numChannels)
 	{
 		stop();
+
+		this->numChannels = numChannels;
 
 		return initDeckLink(device) && startDeckLink(mode);
 	}
@@ -82,8 +84,8 @@ namespace ofxBlackmagic {
 		uiFrameWidth = pDLDisplayMode->GetWidth();
 		uiFrameHeight = pDLDisplayMode->GetHeight();
 
-		pixels[0].allocate(uiFrameWidth, uiFrameHeight, 4);
-		pixels[1].allocate(uiFrameWidth, uiFrameHeight, 4);
+		pixels[0].allocate(uiFrameWidth, uiFrameHeight, numChannels);
+		pixels[1].allocate(uiFrameWidth, uiFrameHeight, numChannels);
 
 		front_buffer = &pixels[0];
 		back_buffer = &pixels[1];
@@ -95,7 +97,8 @@ namespace ofxBlackmagic {
 		if (pDLOutput->EnableVideoOutput(pDLDisplayMode->GetDisplayMode(), bmdVideoOutputFlagDefault) != S_OK)
 			return false;
 
-		if (pDLOutput->CreateVideoFrame(uiFrameWidth, uiFrameHeight, uiFrameWidth * 4, bmdFormat8BitARGB, bmdFrameFlagDefault, &pDLVideoFrame) != S_OK)
+		auto color = numChannels == 4 ? bmdFormat8BitARGB : bmdFormat8BitYUV;
+		if (pDLOutput->CreateVideoFrame(uiFrameWidth, uiFrameHeight, uiFrameWidth * numChannels, color, bmdFrameFlagDefault, &pDLVideoFrame) != S_OK)
 			return false;
 
 		uiTotalFrames = 0;
@@ -139,10 +142,15 @@ namespace ofxBlackmagic {
 				back_buffer->getHeight() != tex.getHeight()) {
 				back_buffer->allocate(tex.getWidth(), tex.getHeight(), pix2.getNumChannels());
 			}
-			memcpy(&back_buffer->getData()[1], pix2.getData(), pix2.size() - 1);
+			if (numChannels == 4) {
+				memcpy(&back_buffer->getData()[1], pix2.getData(), pix2.size() - 1);
+			}
+			else {
+				memcpy(back_buffer->getData(), pix2.getData(), pix2.size());
+			}
 
-			if (back_buffer->getNumChannels() != 4)
-				back_buffer->setNumChannels(4);
+			if (back_buffer->getNumChannels() != numChannels)
+				back_buffer->setNumChannels(numChannels);
 
 			has_new_frame = true;
 
@@ -163,11 +171,16 @@ namespace ofxBlackmagic {
 				back_buffer->getHeight() != pix.getHeight()) {
 				back_buffer->allocate(pix.getWidth(), pix.getHeight(), pix.getNumChannels());
 			}
-			memcpy(&back_buffer->getData()[1], pix.getData(), pix.size() - 1);
-			//*back_buffer = pix;
 
-			if (back_buffer->getNumChannels() != 4)
-				back_buffer->setNumChannels(4);
+			if (numChannels == 4) {
+				memcpy(&back_buffer->getData()[1], pix.getData(), pix.size() - 1);
+			}
+			else {
+				memcpy(back_buffer->getData(), pix.getData(), pix.size());
+			}
+
+			if (back_buffer->getNumChannels() != numChannels)
+				back_buffer->setNumChannels(numChannels);
 
 			has_new_frame = true;
 
@@ -198,7 +211,12 @@ namespace ofxBlackmagic {
 		mutex.lock();
 		queued_pixels.push(pix);
 		auto* back_buffer = &queued_pixels.back();
-		memcpy(&back_buffer->getData()[1], pix.getData(), pix.size() - 1);
+		if (numChannels == 4) {
+			memcpy(&back_buffer->getData()[1], pix.getData(), pix.size() - 1);
+		}
+		else {
+			memcpy(back_buffer->getData(), pix.getData(), pix.size());
+		}
 		mutex.unlock();
 	}
 
